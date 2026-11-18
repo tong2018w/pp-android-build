@@ -256,7 +256,7 @@ class LoginPageController extends GetxController
   }
 
   // app端密码登录
-  Future<void> loginByPassword() async {
+  Future<void> loginByPassword({bool retried = false}) async {
     String username = usernameTextController.text;
     String password = passwordTextController.text;
     if (username.isEmpty || password.isEmpty) {
@@ -288,10 +288,10 @@ class LoginPageController extends GetxController
         return;
       }
       // status==2：'本次登录环境存在风险, 需使用手机号进行验证或绑定'
-      // status==1：'存在安全隐患,本次登录需要身份验证~'（scene=secLogin）
-      // 两者 url 里都带 tmp_token，走同一套 safeCenter 手机号验证流程；
-      // secLogin 的 url 可能没有 request_id/source，下面按可选处理。
-      if (data['status'] == 1 || data['status'] == 2) {
+      // 走 safeCenter 手机号验证（API 流程）。
+      // status==1（'存在安全隐患,本次登录需要身份验证~'，scene=secLogin）
+      // 是另一套官方 H5 身份验证，见下面 else-if，不走本地极验。
+      if (data['status'] == 2) {
         SmartDialog.showToast(data['message']);
         // return;
         //{"code":0,"message":"0","ttl":1,"data":{"status":2,"message":"本次登录环境存在风险, 需使用手机号进行验证或绑定","url":"https://passport.bilibili.com/h5-app/passport/risk/verify?tmp_token=9e785433940891dfa78f033fb7928181&request_id=e5a6d6480df04097870be56c6e60f7ef&source=risk","token_info":null,"cookie_info":null,"sso":null,"is_new":false,"is_tourist":false}}
@@ -515,6 +515,50 @@ class LoginPageController extends GetxController
           ),
         ).whenComplete(textFieldController.dispose);
 
+        return;
+      }
+      if (data['status'] == 1) {
+        // scene=secLogin：'存在安全隐患，本次登录需要身份验证~'
+        // 官方 url 是 H5 身份验证页（带 tmp_token），直接在 App 内打开，
+        // 由 B站 自己的页面处理人机/身份验证；不再走本地极验
+        // （Android 上本地极验 WebView 常白屏/加载失败，是上游已知问题）。
+        final verifyUrl = data['url'];
+        if (verifyUrl is! String || verifyUrl.isEmpty) {
+          SmartDialog.showToast('账号触发安全验证，请改用扫码登录');
+          return;
+        }
+        if (retried) {
+          SmartDialog.showToast('仍被风控拦截，请改用扫码登录');
+          return;
+        }
+        final go = await showDialog<bool>(
+          context: Get.context!,
+          builder: (context) => AlertDialog(
+            title: const Text('本次登录需要身份验证'),
+            content: const Text(
+              '账号触发了 B站 安全验证。点击「开始验证」在官方页面完成手机号/身份验证，'
+              '完成后回来会自动重试登录。\n若验证页打不开，请关闭后改用扫码登录。',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Get.back(result: false),
+                child: const Text('取消'),
+              ),
+              TextButton(
+                onPressed: () => Get.back(result: true),
+                child: const Text('开始验证'),
+              ),
+            ],
+          ),
+        );
+        if (go != true) return;
+        await Get.toNamed(
+          '/webview',
+          parameters: {'url': verifyUrl, 'uaType': 'mob'},
+        );
+        // 完成 H5 验证后自动重试一次登录（风险解除通常可直接登入）
+        SmartDialog.showToast('正在重试登录…');
+        await loginByPassword(retried: true);
         return;
       }
       if (data['token_info'] == null || data['cookie_info'] == null) {

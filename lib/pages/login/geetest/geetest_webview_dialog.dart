@@ -4,6 +4,7 @@ import 'dart:io' show Platform;
 
 import 'package:PiliPlus/http/browser_ua.dart';
 import 'package:PiliPlus/main.dart';
+import 'package:PiliPlus/pages/login/controller.dart';
 import 'package:PiliPlus/plugin/linux_webview.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:get/get.dart';
@@ -265,7 +266,16 @@ class _GeetestWebviewDialogState extends State<GeetestWebviewDialog> {
                         child: const Text('重试'),
                       ),
                       TextButton(
-                        onPressed: Get.back,
+                        onPressed: () {
+                          Get.back();
+                          // 极验在本机/本网络加载失败时，一键切到「扫码」Tab
+                          // （登录页 Tab 顺序：0 密码 / 1 短信 / 2 扫码 / 3 Cookie）
+                          try {
+                            Get.find<LoginPageController>()
+                                .tabController
+                                .animateTo(2);
+                          } catch (_) {}
+                        },
                         child: const Text('关闭，改用扫码登录'),
                       ),
                     ],
