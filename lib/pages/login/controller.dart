@@ -337,15 +337,25 @@ class LoginPageController extends GetxController
             return true;
           }
           if (direct) {
-            // 直连失败：只有服务端明确要求人机验证才回退极验。
-            // -105 / -400 之类是 B站「需要验证」的常见码；
-            // 其它错误（频率限制、手机号问题）直接提示，不再无谓拉极验。
+            // 直连失败：判断是不是「需要人机验证」。
+            // 命中就回退极验；只有明确的非验证类错误（频率限制/号码问题）
+            // 才直接提示，避免无谓拉极验。
             final msg = (res['msg'] ?? '').toString();
             final code = res['code'];
-            final needCaptcha = code == -105 ||
-                msg.contains('captcha') ||
-                msg.contains('极验') ||
-                msg.contains('risk');
+            final nonCaptcha = msg.contains('频繁') ||
+                msg.contains('冷却') ||
+                msg.contains('格式') ||
+                msg.contains('次数') ||
+                msg.contains('不存在');
+            final needCaptcha = !nonCaptcha &&
+                (code == -105 ||
+                    code == -400 ||
+                    code == -509 ||
+                    msg.contains('验证') ||
+                    msg.contains('风控') ||
+                    msg.contains('captcha') ||
+                    msg.contains('极验') ||
+                    msg.contains('人机'));
             if (!needCaptcha) {
               SmartDialog.showToast(
                 '发送短信验证码失败：${res['code']} $msg',
