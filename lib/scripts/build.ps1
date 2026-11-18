@@ -5,7 +5,9 @@ param(
 try {
     $versionName = $null
 
-    $versionCode = [int](git rev-list --count HEAD).Trim()
+    # 镜像仓库提交数很少(会算出 1~3)，装不上已装的 5600+ 版本。
+    # 这里在提交数基础上加 6000 偏移，保证 versionCode 恒大于任何历史版本。
+    $versionCode = 6000 + [int](git rev-list --count HEAD).Trim()
 
     $commitHash = (git rev-parse HEAD).Trim()
 
