@@ -45,8 +45,10 @@ Future<VideoPlayerServiceHandler> initAudioService() {
   return AudioService.init(
     builder: VideoPlayerServiceHandler.new,
     config: const AudioServiceConfig(
-      androidNotificationChannelId: 'com.example.piliplus.audio',
-      androidNotificationChannelName: 'Audio Service ${Constants.appName}',
+      // 渠道换到 v2：旧渠道默认重要性偏高，进视频/直播就弹记录+响铃震动。
+      // 新 id 让系统重建渠道，配合启动前预建的静音渠道生效。
+      androidNotificationChannelId: 'com.example.piliplus.audio_v2',
+      androidNotificationChannelName: 'PiliPlus 播放控制',
       androidNotificationOngoing: true,
       androidStopForegroundOnPause: true,
       fastForwardInterval: Duration(seconds: 10),

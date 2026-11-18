@@ -287,7 +287,11 @@ class LoginPageController extends GetxController
         SmartDialog.showToast('登录异常，接口未返回数据：${res["msg"]}');
         return;
       }
-      if (data['status'] == 2) {
+      // status==2：'本次登录环境存在风险, 需使用手机号进行验证或绑定'
+      // status==1：'存在安全隐患,本次登录需要身份验证~'（scene=secLogin）
+      // 两者 url 里都带 tmp_token，走同一套 safeCenter 手机号验证流程；
+      // secLogin 的 url 可能没有 request_id/source，下面按可选处理。
+      if (data['status'] == 1 || data['status'] == 2) {
         SmartDialog.showToast(data['message']);
         // return;
         //{"code":0,"message":"0","ttl":1,"data":{"status":2,"message":"本次登录环境存在风险, 需使用手机号进行验证或绑定","url":"https://passport.bilibili.com/h5-app/passport/risk/verify?tmp_token=9e785433940891dfa78f033fb7928181&request_id=e5a6d6480df04097870be56c6e60f7ef&source=risk","token_info":null,"cookie_info":null,"sso":null,"is_new":false,"is_tourist":false}}
@@ -463,8 +467,9 @@ class LoginPageController extends GetxController
                       await LoginHttp.safeCenterSmsVerify(
                         code: code,
                         tmpCode: currentUri.queryParameters['tmp_token']!,
-                        requestId: currentUri.queryParameters['request_id']!,
-                        source: currentUri.queryParameters['source']!,
+                        requestId:
+                            currentUri.queryParameters['request_id'] ?? '',
+                        source: currentUri.queryParameters['source'] ?? 'risk',
                         captchaKey: captchaKey,
                         refererUrl: url,
                       );

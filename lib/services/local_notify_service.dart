@@ -32,6 +32,12 @@ class LocalNotifyService {
   bool _inited = false;
   bool _polling = false;
 
+  /// 上次成功轮询的时间戳。Android 后台挂起的 Timer 会在回前台瞬间
+  /// 补触发一次 —— 如果距上次轮询已经过了很久，这轮会把后台期间积压的
+  /// 新开播/新动态当成「刚刚发生」全部推一遍，用户一进视频/直播间就
+  /// 听到铃声震动。超过 2 个轮询周期没跑过时，本轮只刷基线、不发通知。
+  DateTime? _lastPollAt;
+
   /// 上次看到的最新动态 id，用于判断「有新动态」。
   ///
   /// 原来用 DynGrpc.dynRed() 的红点计数判断，但第三方客户端拿到的
@@ -89,6 +95,29 @@ class LocalNotifyService {
       enableLights: true,
     );
     await _plugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(channel);
+  }
+
+  /// 预创建「后台播放」媒体通知渠道（静音、低优先级）。
+  ///
+  /// 用户反馈：进入视频/直播间时，通知历史会多一条记录并伴随铃声震动。
+  /// 根因是 audio_service 的媒体通知渠道默认重要性偏高。这里在
+  /// AudioService.init 之前抢先建好静音渠道 —— 渠道参数创建后不可修改，
+  /// 所以音频服务端已把渠道 id 换成 audio_v2，强制系统重建。
+  /// 这样媒体通知只保留播放控制条，不再响铃/震动，也不走 heads-up。
+  static Future<void> ensureSilentAudioChannel() async {
+    const channel = AndroidNotificationChannel(
+      'com.example.piliplus.audio_v2',
+      'PiliPlus 播放控制',
+      description: '后台播放控制通知（静音，无震动）',
+      importance: Importance.low,
+      playSound: false,
+      enableVibration: false,
+      showBadge: false,
+    );
+    await FlutterLocalNotificationsPlugin()
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(channel);
@@ -156,6 +185,16 @@ class LocalNotifyService {
 
   Future<void> _pollOnce({bool initial = false, bool silent = false}) async {
     if (_polling) return;
+    // 距上次轮询过久（后台 Timer 被挂起、回前台补触发）→ 本轮静默：
+    // 只把基线刷到当前值，不把积压当新提醒推。真实增量交给之后的正常周期。
+    final last = _lastPollAt;
+    if (!silent &&
+        last != null &&
+        DateTime.now().difference(last).inSeconds >
+            Pref.notifPollInterval.clamp(15, 3600) * 2) {
+      silent = true;
+      debugPrint('距上次轮询过久，本轮静默刷基线（回前台防轰炸）');
+    }
     _polling = true;
     try {
       // silent=true：只更新基线，不发任何通知
@@ -169,6 +208,7 @@ class LocalNotifyService {
     } catch (e) {
       debugPrint('本地通知轮询错误: $e');
     } finally {
+      _lastPollAt = DateTime.now();
       _polling = false;
     }
   }
@@ -211,7 +251,9 @@ class LocalNotifyService {
 
   /// 有新动态时发通知（文本 / 图片 / 视频全覆盖）
   ///
-  /// 直接拉动态列表对比最新 id，不再依赖 dynRed 红点计数。
+  /// 改成「来消息样式」：每一条新动态单独发一条系统通知，
+  /// 标题是 UP 名字、正文是动态内容预览，不再是一条「有几条更新」摘要。
+  /// 一次最多发 5 条（避免积压时轰炸通知栏），5 条以上的只报条数。
   Future<void> _checkDynamic({required bool initial}) async {
     // 角标仍用 dynRed（它是红点语义），仅同步显示，不用来判断通知
     if (onDynCount != null) {
@@ -228,13 +270,48 @@ class LocalNotifyService {
     _lastDynId = latestId;
     debugPrint('动态最新 id: $prev -> $latestId (initial=$initial)');
     if (initial || prev == null) return; // 首次只建基线
-    if (latestId != prev && latestId != _notifiedDynId) {
-      _notifiedDynId = latestId;
+
+    // 找出所有新条目：从列表头一路取到上次见过的最新 id 为止。
+    // 用 id 集合而不是只比第一条，避免一次性更新多条时漏发。
+    final newItems = <dynamic>[];
+    for (final item in items) {
+      final id = item.idStr;
+      if (id == null) continue;
+      if (id.toString() == prev.toString()) break;
+      newItems.add(item);
+    }
+    if (newItems.isEmpty) return;
+
+    const maxShow = 5;
+    for (var i = 0; i < newItems.length && i < maxShow; i++) {
+      final item = newItems[i];
+      final author = item.modules.moduleAuthor;
+      final name = author?.name;
+      final text = item.modules.moduleDynamic?.desc?.text;
+      final title = name == null || name.isEmpty ? '动态更新' : name;
+      final body = switch (text) {
+        null || '' => '发布了新动态',
+        _ => text.length > 80 ? '${text.substring(0, 80)}…' : text,
+      };
+      // 动态 id 用于防重：同一条不再重复弹
+      final dynId = item.idStr.toString();
+      if (dynId == _notifiedDynId?.toString()) continue;
+      _notifiedDynId = dynId;
+      // 每条一个稳定通知 id：用 id 的低位散列，避免 OPPO 通知历史合并
+      await _show(
+        id: 1001 + (dynId.hashCode & 0x7fffffff) % 100000,
+        title: title,
+        body: body,
+        payload: 'dyn:$dynId',
+      );
+    }
+    final rest = newItems.length - maxShow;
+    if (rest > 0) {
       await _show(
         id: 1001,
         title: '动态更新',
-        body: '关注的 UP 发布了新动态',
-        payload: 'dyn',
+        body: '还有 $rest 条新动态未展示',
+        payload: 'dyn:more',
       );
     }
   }
