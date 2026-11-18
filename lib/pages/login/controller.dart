@@ -292,6 +292,13 @@ class LoginPageController extends GetxController
       // status==1（'存在安全隐患,本次登录需要身份验证~'，scene=secLogin）
       // 是另一套官方 H5 身份验证，见下面 else-if，不走本地极验。
       if (data['status'] == 2) {
+        if (retried) {
+          SmartDialog.showToast('仍被风控，请改用扫码登录');
+          try {
+            tabController.animateTo(2);
+          } catch (_) {}
+          return;
+        }
         SmartDialog.showToast(data['message']);
         // return;
         //{"code":0,"message":"0","ttl":1,"data":{"status":2,"message":"本次登录环境存在风险, 需使用手机号进行验证或绑定","url":"https://passport.bilibili.com/h5-app/passport/risk/verify?tmp_token=9e785433940891dfa78f033fb7928181&request_id=e5a6d6480df04097870be56c6e60f7ef&source=risk","token_info":null,"cookie_info":null,"sso":null,"is_new":false,"is_tourist":false}}
@@ -422,31 +429,16 @@ class LoginPageController extends GetxController
                   // 先不带极验直接发，服务端明确要求极验时才回退验证码流程。
                   final sent = await sendRiskSms(direct: true);
                   if (sent) return;
-                  // 直连被服务端要求验证 → 回退到极验（带 gt 预检/刷新）
-                  final preCaptureRes = await LoginHttp.preCapture();
-                  if (!preCaptureRes['status'] ||
-                      preCaptureRes['data'] == null) {
-                    SmartDialog.showToast(
-                      "获取验证码失败，请尝试其它登录方式\n"
-                      "(${preCaptureRes['code']}) ${preCaptureRes['msg']}",
-                    );
-                    return;
-                  }
-                  String geeGt = preCaptureRes['data']['gee_gt'];
-                  String geeChallenge = preCaptureRes['data']['gee_challenge'];
-                  captchaData.token = preCaptureRes['data']['recaptcha_token'];
-                  if (!isGeeArgumentValid(geeGt, geeChallenge)) {
-                    SmartDialog.showToast(
-                      "获取极验参数为空，请尝试其它登录方式",
-                    );
-                    return;
-                  }
-                  getCaptcha(
-                    geeGt,
-                    geeChallenge,
-                    () async => sendRiskSms(direct: false),
-                    canRefreshRegistration: true,
+                  // 直连被服务端要求人机验证 → Android 本地极验常白屏（上游已知
+                  // issue #3550/#3505），改用 B站 官方 H5 身份验证页；完成后自动重试登录。
+                  Get.back(); // 关闭短信弹窗
+                  SmartDialog.showToast('请在官方页面完成身份验证');
+                  await Get.toNamed(
+                    '/webview',
+                    parameters: {'url': url, 'uaType': 'mob'},
                   );
+                  SmartDialog.showToast('正在重试登录…');
+                  await loginByPassword(retried: true);
                 },
               ),
               TextButton(
@@ -529,6 +521,9 @@ class LoginPageController extends GetxController
         }
         if (retried) {
           SmartDialog.showToast('仍被风控拦截，请改用扫码登录');
+          try {
+            tabController.animateTo(2);
+          } catch (_) {}
           return;
         }
         final go = await showDialog<bool>(
