@@ -347,22 +347,39 @@ abstract final class LoginHttp {
     }
   }
 
-  // 检查原生 iOS 验证码配置是否已失效
+  // 检查极验 gt 配置是否已失效
+  //
+  // 原来这里写死 client_type=ios&pt=20（那段代码本来是给 iOS 原生验证码用的）。
+  // 但在 Android 上拿到的 gt 未必注册过 ios 客户端，gettype.php 会直接回
+  // error_34(captcha not found)，于是我们误判「配置失效」→ 弹
+  // 「验证码服务暂时不可用」，风控手机号验证彻底走不通。
+  // 现在按 android 客户端探测；android 也说找不到时才认为确实失效。
   static Future<bool> isGeetestConfigUnavailable(String gt) async {
-    try {
-      final res = await Request().get<String>(
-        'https://api.geetest.com/gettype.php',
-        queryParameters: {'gt': gt, 'client_type': 'ios', 'pt': 20},
-        options: Options(
-          responseType: ResponseType.plain,
-          extra: {'account': const NoAccount()},
-        ),
-      );
-      return isMissingCaptchaConfig(res.data ?? '');
-    } catch (_) {
-      // Transport failures do not prove the registration is unavailable.
-      return false;
+    Future<bool> probe(String clientType) async {
+      try {
+        final res = await Request().get<String>(
+          'https://api.geetest.com/gettype.php',
+          queryParameters: {
+            'gt': gt,
+            'client_type': clientType,
+            'pt': 20,
+          },
+          options: Options(
+            responseType: ResponseType.plain,
+            extra: {'account': const NoAccount()},
+          ),
+        );
+        return isMissingCaptchaConfig(res.data ?? '');
+      } catch (_) {
+        // Transport failures do not prove the registration is unavailable.
+        return false;
+      }
     }
+
+    // android 先探；说找不到再按 ios 探一次（兼容 iOS 原生流程）
+    final androidMissing = await probe('android');
+    if (!androidMissing) return false;
+    return probe('ios');
   }
 
   // 风控验证手机前的极验验证码

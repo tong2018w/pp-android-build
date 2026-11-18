@@ -156,11 +156,11 @@ class LoginPageController extends GetxController
           },
         );
         if (isClosed) return;
-        if (resolved == null) {
-          SmartDialog.showToast('验证码服务暂时不可用，请稍后重试或使用扫码登录');
-          return;
-        }
-        session = resolved;
+        // 预检只是旁证：即使说「配置不可用」，也不要直接放弃。
+        // WebView 里的极验才是唯一可信的判定，先让用户试一次；
+        // 真加载不出来时 WebView 自己会显示失败+重试，比这里一句
+        // 「验证码服务暂时不可用」有用得多（这句曾把路彻底堵死）。
+        if (resolved != null) session = resolved;
       }
 
       final res = await GeetestWebviewDialog.geetest(
