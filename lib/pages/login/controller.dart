@@ -54,7 +54,7 @@ class LoginPageController extends GetxController
   @override
   void onInit() {
     super.onInit();
-    tabController = TabController(length: 4, vsync: this)
+    tabController = TabController(length: 3, vsync: this)
       ..addListener(_handleTabChange);
   }
 
@@ -87,7 +87,7 @@ class LoginPageController extends GetxController
           return;
         }
         qrCodeLeftTime.value = left;
-        if (_isReq || tabController.index != 2) return;
+        if (_isReq || tabController.index != 1) return;
 
         _isReq = true;
         LoginHttp.codePoll(response.authCode).then((value) async {
@@ -112,7 +112,7 @@ class LoginPageController extends GetxController
   }
 
   void _handleTabChange() {
-    if (tabController.index == 2) {
+    if (tabController.index == 1) {
       if (qrCodeTimer == null || !qrCodeTimer!.isActive) {
         refreshQRCode();
       }
@@ -295,7 +295,7 @@ class LoginPageController extends GetxController
         if (retried) {
           SmartDialog.showToast('仍被风控，请改用扫码登录');
           try {
-            tabController.animateTo(2);
+            tabController.animateTo(1);
           } catch (_) {}
           return;
         }
@@ -522,7 +522,7 @@ class LoginPageController extends GetxController
         if (retried) {
           SmartDialog.showToast('仍被风控拦截，请改用扫码登录');
           try {
-            tabController.animateTo(2);
+            tabController.animateTo(1);
           } catch (_) {}
           return;
         }

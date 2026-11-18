@@ -269,11 +269,11 @@ class _GeetestWebviewDialogState extends State<GeetestWebviewDialog> {
                         onPressed: () {
                           Get.back();
                           // 极验在本机/本网络加载失败时，一键切到「扫码」Tab
-                          // （登录页 Tab 顺序：0 密码 / 1 短信 / 2 扫码 / 3 Cookie）
+                          // （登录页 Tab 顺序：0 短信 / 1 扫码 / 2 Cookie）
                           try {
                             Get.find<LoginPageController>()
                                 .tabController
-                                .animateTo(2);
+                                .animateTo(1);
                           } catch (_) {}
                         },
                         child: const Text('关闭，改用扫码登录'),
