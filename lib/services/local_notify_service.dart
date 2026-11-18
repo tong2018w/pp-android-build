@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert' show jsonDecode, jsonEncode;
 import 'dart:io' show Platform;
 import 'dart:typed_data' show Int64List;
 
@@ -6,6 +7,8 @@ import 'package:PiliPlus/grpc/dyn.dart';
 import 'package:PiliPlus/http/dynamics.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/http/msg.dart';
+import 'package:PiliPlus/services/background_notify.dart';
+import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -44,18 +47,13 @@ class LocalNotifyService {
   /// count 常年不变化（B站对第三方限流），导致文本/图片/视频动态
   /// 全都不触发通知。改为直接拉动态列表，对比第一条的 id_str ——
   /// 只要最新 id 变了就有新动态，覆盖所有类型。
-  Object? _lastDynId;
-
-  /// 上次正在直播的 uid → 名字，用于判断「新开播」
-  final Map<int, String> _lastLive = {};
-
-  /// 上次的消息未读总数（私信/@/回复/点赞/系统）
-  int? _lastMsgCount;
-
-  /// 已经通知过的动态 id / 消息未读数，用于防重。
-  /// 动态用最新 id 对比（不是 count），避免计数波动导致反复弹同一条。
-  Object? _notifiedDynId;
-  int? _notifiedMsgCount;
+  ///
+  /// 注意：WorkManager 后台任务每次是新 isolate，内存基线会丢，所以这里
+  /// 不再用内存字段，统一持久化到 setting box（见 _kLast*），前台 Timer
+  /// 与后台任务共用同一份基线，避免重复/漏发。
+  static const _kLastDynId = 'notif_last_dyn_id';
+  static const _kLastMsgCount = 'notif_last_msg_count';
+  static const _kLastLive = 'notif_last_live';
 
   /// 动态未读数回调：由 MainController 注册，用它同步底部角标。
   /// 角标仍用 dynRed 语义；通知判断改用最新动态 id（见 _checkDynamic）。
@@ -156,6 +154,8 @@ class LocalNotifyService {
       debugPrint('通知权限未授予或无法判定，仍尝试启动轮询');
     }
     _startTimer();
+    // 同时安排 WorkManager 后台周期任务（App 退后台/被杀后仍会跑）
+    await scheduleBackgroundNotify(enable: true);
   }
 
   void _startTimer() {
@@ -169,6 +169,8 @@ class LocalNotifyService {
   void stop() {
     _timer?.cancel();
     _timer = null;
+    // 通知全关时取消 WorkManager 后台任务
+    scheduleBackgroundNotify(enable: false);
   }
 
   /// 回到前台时只同步基线，不发通知。
@@ -213,6 +215,23 @@ class LocalNotifyService {
     }
   }
 
+  /// WorkManager 后台任务入口：无状态地跑一轮检测并弹通知。
+  ///
+  /// 与前台 Timer 共用持久化基线（_kLast*），所以不会重复弹。
+  /// 后台 isolate 里没有 _lastPollAt（每条任务新 isolate），这里不做防轰炸，
+  /// 直接按持久化基线判断真实增量。
+  Future<void> runBackgroundPoll() async {
+    await init();
+    if (!_canNotify) return;
+    try {
+      if (Pref.enableMsgNotif) await _checkMsg(initial: false);
+      if (Pref.enableDynNotif) await _checkDynamic(initial: false);
+      if (Pref.enableLiveNotif) await _checkLive(initial: false);
+    } catch (e) {
+      debugPrint('后台通知轮询错误: $e');
+    }
+  }
+
   /// 消息未读（私信 / @ / 回复 / 点赞 / 系统）增加时发通知
   ///
   /// 这是「来消息及时通知」的主体 —— 之前只做了动态红点和开播，
@@ -235,11 +254,10 @@ class LocalNotifyService {
       total += response.at + response.reply + response.like + response.sysMsg;
     }
 
-    final prev = _lastMsgCount;
-    _lastMsgCount = total;
+    final prev = GStorage.setting.get(_kLastMsgCount) as int?;
+    await GStorage.setting.put(_kLastMsgCount, total);
     if (initial || prev == null) return; // 首次只建基线
-    if (total > prev && total != _notifiedMsgCount) {
-      _notifiedMsgCount = total;
+    if (total > prev) {
       await _show(
         id: 1000,
         title: '新消息',
@@ -266,8 +284,8 @@ class LocalNotifyService {
     final latestId = items.first.idStr;
     if (latestId == null) return;
 
-    final prev = _lastDynId;
-    _lastDynId = latestId;
+    final prev = GStorage.setting.get(_kLastDynId)?.toString();
+    await GStorage.setting.put(_kLastDynId, latestId.toString());
     debugPrint('动态最新 id: $prev -> $latestId (initial=$initial)');
     if (initial || prev == null) return; // 首次只建基线
 
@@ -277,7 +295,7 @@ class LocalNotifyService {
     for (final item in items) {
       final id = item.idStr;
       if (id == null) continue;
-      if (id.toString() == prev.toString()) break;
+      if (id.toString() == prev) break;
       newItems.add(item);
     }
     if (newItems.isEmpty) return;
@@ -293,10 +311,8 @@ class LocalNotifyService {
         null || '' => '发布了新动态',
         _ => text.length > 80 ? '${text.substring(0, 80)}…' : text,
       };
-      // 动态 id 用于防重：同一条不再重复弹
+      // 动态 id 用于稳定通知 id 与去重
       final dynId = item.idStr.toString();
-      if (dynId == _notifiedDynId?.toString()) continue;
-      _notifiedDynId = dynId;
       // 每条一个稳定通知 id：用 id 的低位散列，避免 OPPO 通知历史合并
       await _show(
         id: 1001 + (dynId.hashCode & 0x7fffffff) % 100000,
@@ -318,24 +334,21 @@ class LocalNotifyService {
 
   /// 对比直播状态，新开播的 UP 发通知
   Future<void> _checkLive({required bool initial}) async {
-    if (_lastLive.isEmpty && initial) {
-      // 首次先拉一次建立基线，下面逻辑统一处理
-    }
     // 关注的 uid 从账号信息取不到完整列表时，用动态页 liveUsers 的 mid。
     // 这里用 PiliPlus 已有的 followDynamic 拿到的直播列表。
     final live = await _fetchLiveUsers();
     if (live == null) return;
 
     final current = {for (final e in live.entries) e.key: e.value};
-    if (initial) {
-      _lastLive
-        ..clear()
-        ..addAll(current);
-      return;
-    }
+    final raw = GStorage.setting.get(_kLastLive);
+    final prevMids = raw is String
+        ? (jsonDecode(raw) as List).map((e) => e as int).toSet()
+        : <int>{};
+    // 先落盘当前基线（前台/后台共用）
+    await GStorage.setting.put(_kLastLive, jsonEncode(current.keys.toList()));
+    if (initial) return;
     for (final entry in current.entries) {
-      final wasLive = _lastLive.containsKey(entry.key);
-      if (!wasLive) {
+      if (!prevMids.contains(entry.key)) {
         await _show(
           id: 2000 + entry.key,
           title: '${entry.value} 开播了',
@@ -344,9 +357,6 @@ class LocalNotifyService {
         );
       }
     }
-    _lastLive
-      ..clear()
-      ..addAll(current);
   }
 
   /// 拉取正在直播的 UP（mid → uname）

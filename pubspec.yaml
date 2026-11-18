@@ -35,6 +35,8 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   flutter_local_notifications: ^19.4.2
+  # 后台周期任务（Android WorkManager），用于 App 退后台/被杀后仍轮询发通知
+  workmanager: ^0.10.10
 
   app_links: ^7.1.1
   archive: ^4.0.0
