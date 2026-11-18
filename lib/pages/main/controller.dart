@@ -13,11 +13,9 @@ import 'package:PiliPlus/pages/dynamics/controller.dart';
 import 'package:PiliPlus/pages/home/controller.dart';
 import 'package:PiliPlus/pages/mine/view.dart';
 import 'package:PiliPlus/services/account_service.dart';
-import 'package:PiliPlus/services/local_notify_service.dart';
 import 'package:PiliPlus/utils/extension/get_ext.dart';
 import 'package:PiliPlus/utils/extension/iterable_ext.dart';
 import 'package:PiliPlus/utils/feed_back.dart';
-import 'package:PiliPlus/utils/platform_utils.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
@@ -79,19 +77,6 @@ class MainController extends GetxController
     }
 
     setNavBarConfig();
-
-    // 消息/动态/开播本地通知：按设置启动轮询。
-    // 原来这里还要求 accountService.isLogin.value 为 true，
-    // 但 onInit 时账号信息可能还没加载完 → 永远不启动。
-    // 改成交给 service 内部判断，并延迟一拍等账号就绪。
-    if (PlatformUtils.isMobile) {
-      // 通知轮询拿到的动态未读数直接喂给底部角标，
-      // 「检查未读动态」那套 60 分钟轮询就不必再重复拉一次
-      LocalNotifyService.instance.onDynCount = setDynCount;
-      Future.delayed(const Duration(seconds: 3), () {
-        LocalNotifyService.instance.syncPolling();
-      });
-    }
 
     controller = mainTabBarView
         ? TabController(

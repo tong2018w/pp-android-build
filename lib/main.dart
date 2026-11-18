@@ -14,8 +14,6 @@ import 'package:PiliPlus/router/app_pages.dart';
 import 'package:PiliPlus/services/account_service.dart';
 import 'package:PiliPlus/services/download/download_service.dart';
 import 'package:PiliPlus/services/logger.dart';
-import 'package:PiliPlus/services/background_notify.dart';
-import 'package:PiliPlus/services/local_notify_service.dart';
 import 'package:PiliPlus/services/service_locator.dart';
 import 'package:PiliPlus/utils/cache_manager.dart';
 import 'package:PiliPlus/utils/date_utils.dart';
@@ -116,14 +114,6 @@ void main() async {
     ..lazyPut(AccountService.new)
     ..lazyPut(DownloadService.new);
   HttpOverrides.global = _CustomHttpOverrides();
-
-  if (PlatformUtils.isMobile && Platform.isAndroid) {
-    // 先把「后台播放」媒体通知渠道建成静音，避免进视频/直播间就响铃震动。
-    // 必须在 setupServiceLocator()（内部 AudioService.init）之前完成。
-    await LocalNotifyService.ensureSilentAudioChannel();
-    // 注册 WorkManager 后台通知回调（App 退后台/被杀后 ~15 分钟一轮）
-    await initBackgroundNotify();
-  }
 
   if (PlatformUtils.isMobile) {
     if (Platform.isAndroid) MaxScreenSize.init();

@@ -9,7 +9,6 @@ import 'package:PiliPlus/common/widgets/route_aware_mixin.dart';
 import 'package:PiliPlus/models/common/nav_bar_config.dart';
 import 'package:PiliPlus/pages/home/view.dart';
 import 'package:PiliPlus/pages/main/controller.dart';
-import 'package:PiliPlus/services/local_notify_service.dart';
 import 'package:PiliPlus/utils/android/bindings.g.dart';
 import 'package:PiliPlus/utils/app_scheme.dart';
 import 'package:PiliPlus/utils/desktop/tray_controller.dart';
@@ -102,8 +101,6 @@ class _MainAppState extends PopScopeState<MainApp>
         ..checkUnreadDynamic()
         ..checkDefaultSearch(true)
         ..checkUnread(_mainController.useBottomNav);
-      // 后台 Timer 会被系统挂起，回前台补一次通知检测
-      LocalNotifyService.instance.checkNow();
     }
   }
 

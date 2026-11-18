@@ -6,7 +6,6 @@ import 'package:PiliPlus/models/dynamics/result.dart'
     show DynamicsDataModel, ItemModulesModel;
 import 'package:PiliPlus/pages/main/controller.dart';
 import 'package:PiliPlus/pages/setting/models/model.dart';
-import 'package:PiliPlus/services/local_notify_service.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
@@ -119,31 +118,6 @@ List<SettingsModel> get dynSettings => [
     onChanged: (val) => ItemModulesModel.showDynInteraction = val,
   ),
 
-  // ── 本地通知（非服务端推送）─────────────────────────
-  SwitchModel(
-    title: '新消息时通知',
-    subtitle: '私信 / @ / 回复 / 点赞有未读时发系统通知（App 运行时轮询，非服务端推送）',
-    leading: const Icon(Icons.mark_email_unread_outlined),
-    setKey: SettingBoxKey.enableMsgNotif,
-    defaultVal: true,
-    onChanged: (val) => LocalNotifyService.instance.syncPolling(),
-  ),
-  SwitchModel(
-    title: '动态更新时通知',
-    subtitle: '本地轮询检测关注动态增加时发系统通知（App 运行时有效，非服务端推送）',
-    leading: const Icon(Icons.notifications_active_outlined),
-    setKey: SettingBoxKey.enableDynNotif,
-    defaultVal: true,
-    onChanged: (val) => LocalNotifyService.instance.syncPolling(),
-  ),
-  SwitchModel(
-    title: '关注的 UP 开播时通知',
-    subtitle: '本地轮询检测关注的 UP 开播时发系统通知',
-    leading: const Icon(Icons.live_tv_outlined),
-    setKey: SettingBoxKey.enableLiveNotif,
-    defaultVal: true,
-    onChanged: (val) => LocalNotifyService.instance.syncPolling(),
-  ),
 ];
 
 void _showDynDialog(BuildContext context) {
