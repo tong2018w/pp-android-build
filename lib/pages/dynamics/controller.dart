@@ -34,6 +34,11 @@ class DynamicsController
   final _currentMid = (-1).obs;
   int get currentMid => _currentMid.value;
   set currentMid(int value) => _currentMid.value = value;
+
+  /// UP 头像「未读动态」点的已读版本号：清除未读后自增，
+  /// 驱动头像栏 Obx 重建，让未读点「浏览过就消失」。
+  final _upReadTick = 0.obs;
+  int get upReadTick => _upReadTick.value;
   late final _showAllUp = Pref.dynamicsShowAllFollowedUp;
 
   final upOnlyMode = Pref.dynUpOnlyMode;
@@ -81,8 +86,43 @@ class DynamicsController
       vsync: this,
       length: DynamicsTabType.values.length,
       initialIndex: Pref.defaultDynamicTypeIndex,
-    );
+    )..addListener(_handleDynTabChange);
     queryData();
+  }
+
+  void _handleDynTabChange() {
+    // 切到「全部」分类即视为浏览了全部动态，清掉头像未读点
+    if (tabController.index == DynamicsTabType.all.index) {
+      markUpRead(-1);
+    }
+  }
+
+  /// 把指定 UP（-1 表示全部）的未读动态点标记为已读。
+  ///
+  /// 用户反馈：UP 头像上的未读动态点「浏览过动态后不会主动消失」。
+  /// 这里在「选中/横滑到某个 UP」「切到全部动态」时，直接把模型里对应
+  /// 的 hasUpdate 置 false，并自增 upReadTick 驱动头像栏重建，
+  /// 使未读点立即消失，而不是等下次重新拉取列表。
+  void markUpRead(int mid) {
+    final state = loadingState.value;
+    if (state is! Success<FollowUpModel>) return;
+    final model = state.response;
+    var changed = false;
+    void handle(UpItem? item) {
+      if (item == null) return;
+      if ((mid == -1 || item.mid == mid) && (item.hasUpdate ?? false)) {
+        item.hasUpdate = false;
+        changed = true;
+      }
+    }
+
+    for (final item in model.upList ?? const <UpItem>[]) {
+      handle(item);
+    }
+    for (final item in model.liveUsers?.items ?? const <LiveUserItem>[]) {
+      handle(item);
+    }
+    if (changed) _upReadTick.value++;
   }
 
   void _jumpToTab(int mid) {
@@ -96,9 +136,13 @@ class DynamicsController
     if (currentMid == mid) return;
     currentMid = mid;
     hostMid = mid;
+    // 横滑到某个 UP，视为已浏览其动态 → 清掉该 UP 未读点
+    markUpRead(mid);
   }
 
   void onSelectUp(int mid) {
+    // 选中某个 UP（或「全部动态」）即视为浏览，清除对应未读点
+    markUpRead(mid);
     if (useUpPageView) {
       _jumpToTab(mid);
       if (currentMid != mid) {

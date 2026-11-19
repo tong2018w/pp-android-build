@@ -139,12 +139,14 @@ class _UpPanelState extends State<UpPanel> {
   }
 
   void _onSelect(UpItem item) {
-    item.hasUpdate = false;
+    // 选中即视为浏览过该 UP（-1 为全部）的动态，controller 内会清除未读点
     controller.onSelectUp(item.mid);
     setState(() {});
   }
 
   Widget upItemBuild(ThemeData theme, UpItem item) {
+    // 依赖「已读版本号」，清除未读点后能立即重建头像栏
+    controller.upReadTick;
     final currentMid = controller.currentMid;
     final isLive = item is LiveUserItem;
     // 只有「全部动态」和自己那一位算选中；原来是 currentMid == -1 就全高亮，

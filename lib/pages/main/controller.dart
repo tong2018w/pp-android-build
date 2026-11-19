@@ -321,11 +321,37 @@ class MainController extends GetxController
         if (currentNav == NavigationBarType.home) {
           homeController.toTopOrRefresh();
         } else if (currentNav == NavigationBarType.dynamics) {
-          dynamicController.toTopOrRefresh();
+          // 已在动态页再点「动态」：不在「全部动态」时直接回到全部；
+          // 已在全部动态则保持原来的回顶/刷新行为。
+          if (_dynAtAll) {
+            dynamicController.toTopOrRefresh();
+          } else {
+            _returnDynamicsAll();
+          }
         }
       }
       _lastSelectTime = now;
     }
+  }
+
+  /// 是否正停在「全部动态」分类
+  bool get _dynAtAll {
+    try {
+      return dynamicController.tabController.index == 0 &&
+          dynamicController.currentMid == -1;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// 回到动态页的「全部动态」分类
+  void _returnDynamicsAll() {
+    try {
+      if (dynamicController.tabController.index != 0 ||
+          dynamicController.currentMid != -1) {
+        dynamicController.onSelectUp(-1);
+      }
+    } catch (_) {}
   }
 
   void setSearchBar() {
