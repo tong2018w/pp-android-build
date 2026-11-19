@@ -23,9 +23,8 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
-        // flutter_local_notifications 依赖 java.time 等 API，
-        // 低版本 Android 上必须靠 desugaring 补齐，否则构建报
-        // "requires core library desugaring to be enabled"
+        // desugaring 保留：历史上为 flutter_local_notifications(依赖 java.time) 开启，
+        // 该本地通知功能已移除，但保留 desugaring 以兼容其它依赖的 java.time 用法，无副作用。
         isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

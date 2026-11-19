@@ -384,22 +384,6 @@ abstract final class Pref {
   static bool get checkDynamic =>
       _setting.get(SettingBoxKey.checkDynamic, defaultValue: true);
 
-  /// 消息未读（私信/@/回复）本地通知开关
-  static bool get enableMsgNotif =>
-      _setting.get(SettingBoxKey.enableMsgNotif, defaultValue: true);
-
-  /// 动态更新本地通知开关
-  static bool get enableDynNotif =>
-      _setting.get(SettingBoxKey.enableDynNotif, defaultValue: true);
-
-  /// 开播提醒本地通知开关
-  static bool get enableLiveNotif =>
-      _setting.get(SettingBoxKey.enableLiveNotif, defaultValue: true);
-
-  /// 通知轮询间隔（秒），默认 60
-  static int get notifPollInterval =>
-      _setting.get(SettingBoxKey.notifPollInterval, defaultValue: 30);
-
   static int get dynamicPeriod =>
       _setting.get(SettingBoxKey.dynamicPeriod, defaultValue: 5);
 
