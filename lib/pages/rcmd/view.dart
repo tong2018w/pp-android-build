@@ -6,6 +6,7 @@ import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:PiliPlus/common/widgets/video_card/video_card_v.dart';
 import 'package:PiliPlus/http/loading_state.dart';
+import 'package:PiliPlus/models/common/rcmd_source.dart';
 import 'package:PiliPlus/pages/rcmd/controller.dart';
 import 'package:PiliPlus/utils/grid.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
@@ -42,6 +43,7 @@ class _RcmdPageState extends State<RcmdPage>
           controller: controller.scrollController,
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
+            SliverToBoxAdapter(child: _sourceBar(colorScheme)),
             SliverPadding(
               padding: const .only(top: Style.cardSpace, bottom: 100),
               sliver: Obx(
@@ -80,6 +82,59 @@ class _RcmdPageState extends State<RcmdPage>
     childAspectRatio: Style.aspectRatio,
     mainAxisExtent: MediaQuery.textScalerOf(context).scale(90),
   );
+
+  /// 推荐源快速切换条：App 端 / Web 端 / 桌面端，点选即切源并刷新
+  Widget _sourceBar(ColorScheme colorScheme) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, 4, 0, 0),
+      child: Row(
+        children: [
+          for (final source in RcmdSource.values) ...[
+            _sourceChip(colorScheme, source),
+            const SizedBox(width: 6),
+          ],
+          const Spacer(),
+          Text(
+            '推荐源',
+            style: TextStyle(
+              fontSize: 11,
+              color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sourceChip(ColorScheme colorScheme, RcmdSource source) {
+    final selected = controller.rcmdSource == source;
+    return InkWell(
+      onTap: () {
+        controller.switchRcmdSource(source);
+        setState(() {});
+      },
+      borderRadius: BorderRadius.circular(14),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+        decoration: BoxDecoration(
+          color: selected
+              ? colorScheme.primaryContainer
+              : colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
+          borderRadius: const BorderRadius.all(.circular(14)),
+        ),
+        child: Text(
+          source.label,
+          style: TextStyle(
+            color: selected
+                ? colorScheme.onPrimaryContainer
+                : colorScheme.onSurfaceVariant,
+            fontSize: 12,
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _buildBody(
     ColorScheme colorScheme,

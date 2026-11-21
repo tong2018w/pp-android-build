@@ -5,6 +5,8 @@ import 'package:PiliPlus/pages/common/common_controller.dart'
     show RefreshImplMixin;
 import 'package:PiliPlus/pages/common/common_list_controller.dart';
 import 'package:PiliPlus/utils/extension/scroll_controller_ext.dart';
+import 'package:PiliPlus/utils/storage.dart';
+import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
 
 class RcmdController extends CommonListController with RefreshImplMixin {
@@ -15,6 +17,18 @@ class RcmdController extends CommonListController with RefreshImplMixin {
 
   int? lastRefreshAt;
   late bool savedRcmdTip = Pref.savedRcmdTip;
+
+  /// 推荐页顶栏「推荐源快速切换」：切源后持久化并立即刷新。
+  /// 官方/Web/桌面端三源的推荐内容差异明显，快速切换能明显改善「推荐不合口味」。
+  Future<void> switchRcmdSource(RcmdSource source) async {
+    if (source == rcmdSource) return;
+    rcmdSource = source;
+    await GStorage.setting.put(SettingBoxKey.rcmdSource, source.index);
+    loadingState.value = LoadingState<List<dynamic>?>.loading();
+    page = 0;
+    scrollController.jumpToTop();
+    await queryData();
+  }
 
   @override
   bool get isEnd => false;
