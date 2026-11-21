@@ -1,6 +1,7 @@
 import 'package:PiliPlus/http/dynamics.dart';
 import 'package:PiliPlus/http/loading_state.dart';
 import 'package:PiliPlus/http/msg.dart';
+import 'package:PiliPlus/models/common/dynamic/dynamic_filter.dart';
 import 'package:PiliPlus/models/common/dynamic/dynamics_type.dart';
 import 'package:PiliPlus/models/dynamics/result.dart';
 import 'package:PiliPlus/pages/common/common_controller.dart';
@@ -20,8 +21,41 @@ class DynamicsTabController
 
   String? offset;
 
+  /// 「全部动态」内的二级内容筛选（仅全部页生效）
+  final _filter = DynamicsFilter.all.obs;
+  DynamicsFilter get filter => _filter.value;
+
   late final mainController = Get.find<MainController>();
   final dynamicsController = Get.find<DynamicsController>();
+
+  /// 实际展示的数据：全部页按筛选条件过滤，其它分类原样返回
+  List<DynamicItemModel> get displayData {
+    final list = loadingState.value.data;
+    if (list == null || dynamicsType != .all) return list ?? const [];
+    final filter = _filter.value;
+    if (filter == DynamicsFilter.all) return list;
+    return list.where(filter.matches).toList();
+  }
+
+  /// 某条动态在原始列表中的下标（筛选后展示下标与原始下标可能不同，
+  /// 删除/折叠等操作需按原始下标操作，避免删错）
+  int rawIndexOf(DynamicItemModel item) {
+    final list = loadingState.value.data;
+    return list == null ? -1 : list.indexOf(item);
+  }
+
+  void setFilter(DynamicsFilter filter) {
+    if (_filter.value == filter) return;
+    _filter.value = filter;
+    scrollController.jumpToTop();
+  }
+
+  /// 一键清空所有关注 UP 的「未读动态」标记
+  void clearAllRead() {
+    dynamicsController.markUpRead(-1);
+    if (dynamicsType == .all) mainController.setDynCount();
+    SmartDialog.showToast('已清空未读标记');
+  }
 
   @override
   void onInit() {

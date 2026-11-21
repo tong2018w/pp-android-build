@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:PiliPlus/common/widgets/flutter/refresh_indicator.dart';
 import 'package:PiliPlus/common/widgets/loading_widget/http_error.dart';
 import 'package:PiliPlus/http/loading_state.dart';
+import 'package:PiliPlus/models/common/dynamic/dynamic_filter.dart';
 import 'package:PiliPlus/models/common/dynamic/dynamics_type.dart';
 import 'package:PiliPlus/models/dynamics/result.dart';
 import 'package:PiliPlus/pages/dynamics/controller.dart';
@@ -59,6 +60,8 @@ class _DynamicsTabPageState extends State<DynamicsTabPage>
         physics: const AlwaysScrollableScrollPhysics(),
         controller: controller.scrollController,
         slivers: [
+          if (widget.dynamicsType == .all)
+            SliverToBoxAdapter(child: _filterBar(ColorScheme.of(context))),
           SliverPadding(
             padding: const EdgeInsets.only(bottom: 100),
             sliver: buildPage(
@@ -73,23 +76,7 @@ class _DynamicsTabPageState extends State<DynamicsTabPage>
   Widget _buildBody(LoadingState<List<DynamicItemModel>?> loadingState) {
     return switch (loadingState) {
       Loading() => dynSkeleton,
-      Success(:final response) =>
-        response != null && response.isNotEmpty
-            ? GlobalData().dynamicsWaterfallFlow
-                  ? SliverMasonryGrid(
-                      crossAxisSpacing: 4,
-                      gridDelegate: dynGridDelegate,
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) => _itemBuilder(response, index),
-                        childCount: response.length,
-                      ),
-                    )
-                  : SliverList.builder(
-                      itemBuilder: (context, index) =>
-                          _itemBuilder(response, index),
-                      itemCount: response.length,
-                    )
-            : HttpError(onReload: controller.onReload),
+      Success(:final response) => _buildSuccess(response),
       Error(:final errMsg) => HttpError(
         errMsg: errMsg,
         onReload: controller.onReload,
@@ -97,16 +84,120 @@ class _DynamicsTabPageState extends State<DynamicsTabPage>
     };
   }
 
+  Widget _buildSuccess(List<DynamicItemModel>? response) {
+    // 全部页按筛选条件展示，其它分类原样展示
+    final data = controller.displayData;
+    if (data.isEmpty) {
+      final raw = response;
+      if (raw != null && raw.isNotEmpty) {
+        return SliverToBoxAdapter(
+          child: Center(
+            child: Column(
+              mainAxisSize: .min,
+              children: [
+                const Text('该分类下没有更多内容'),
+                TextButton(
+                  onPressed: controller.onReload,
+                  child: const Text('刷新'),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+      return HttpError(onReload: controller.onReload);
+    }
+    return GlobalData().dynamicsWaterfallFlow
+            ? SliverMasonryGrid(
+                crossAxisSpacing: 4,
+                gridDelegate: dynGridDelegate,
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) => _itemBuilder(data, index),
+                  childCount: data.length,
+                ),
+              )
+            : SliverList.builder(
+                itemBuilder: (context, index) => _itemBuilder(data, index),
+                itemCount: data.length,
+              );
+  }
+
+  /// 「全部动态」的二级筛选条：内容类型快捷过滤 + 一键清空未读
+  Widget _filterBar(ColorScheme colorScheme) {
+    return Obx(
+      () => Material(
+        color: colorScheme.surface,
+        child: SizedBox(
+          height: 46,
+          child: Row(
+            children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  scrollDirection: .horizontal,
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  child: Row(
+                    children: [
+                      for (final filter in DynamicsFilter.values)
+                        Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: _filterChip(colorScheme, filter),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              if (widget.dynamicsType == .all)
+                TextButton(
+                  onPressed: controller.clearAllRead,
+                  child: const Text('清空未读'),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _filterChip(ColorScheme colorScheme, DynamicsFilter filter) {
+    final selected = controller.filter == filter;
+    return InkWell(
+      onTap: () => controller.setFilter(filter),
+      borderRadius: BorderRadius.circular(16),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected
+              ? colorScheme.primaryContainer
+              : colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
+          borderRadius: const BorderRadius.all(.circular(16)),
+        ),
+        child: Text(
+          filter.label,
+          style: TextStyle(
+            color: selected
+                ? colorScheme.onPrimaryContainer
+                : colorScheme.onSurfaceVariant,
+            fontSize: 13,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _itemBuilder(List<DynamicItemModel> list, int index) {
     if (index == list.length - 1) {
       controller.onLoadMore();
     }
     final item = list[index];
+    // 筛选后展示下标可能与原始列表下标不一致，操作按原始下标进行
+    final rawIndex = controller.rawIndexOf(item);
+    final targetIndex = rawIndex >= 0 ? rawIndex : index;
     return DynamicPanel(
       item: item,
-      onRemove: (idStr) => controller.onRemove(index, idStr),
-      onBlock: () => controller.onBlock(index),
-      onUnfold: () => controller.onUnfold(item, index),
+      onRemove: (idStr) => controller.onRemove(targetIndex, idStr),
+      onBlock: () => controller.onBlock(targetIndex),
+      onUnfold: () => controller.onUnfold(item, targetIndex),
     );
   }
 }
