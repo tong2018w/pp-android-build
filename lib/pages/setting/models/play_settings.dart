@@ -14,6 +14,7 @@ import 'package:PiliPlus/plugin/pl_player/models/bottom_progress_behavior.dart';
 import 'package:PiliPlus/plugin/pl_player/models/fullscreen_mode.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_repeat.dart';
 import 'package:PiliPlus/services/service_locator.dart';
+import 'package:PiliPlus/utils/account_pref.dart';
 import 'package:PiliPlus/utils/android/android_helper.dart';
 import 'package:PiliPlus/utils/desktop/window_controller.dart';
 import 'package:PiliPlus/utils/extension/num_ext.dart';
@@ -434,10 +435,7 @@ Future<void> _showSubtitleDialog(
     ),
   );
   if (res != null) {
-    await GStorage.setting.put(
-      SettingBoxKey.subtitlePreferenceV2,
-      res.index,
-    );
+    await AccountPrefs.put(SettingBoxKey.subtitlePreferenceV2, res.index);
     setState();
   }
 }

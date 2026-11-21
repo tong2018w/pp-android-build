@@ -4,6 +4,7 @@ import 'package:PiliPlus/common/widgets/flutter/list_tile.dart';
 import 'package:PiliPlus/common/widgets/scaffold/simple_scaffold.dart';
 import 'package:PiliPlus/common/widgets/view_safe_area.dart';
 import 'package:PiliPlus/pages/setting/widgets/switch_item.dart';
+import 'package:PiliPlus/utils/account_pref.dart';
 import 'package:PiliPlus/utils/extension/context_ext.dart';
 import 'package:PiliPlus/utils/filtering_text.dart';
 import 'package:PiliPlus/utils/storage.dart';
@@ -157,9 +158,9 @@ class _PlaySpeedPageState extends State<PlaySpeedPage> {
     double speed = speedList[index];
     // 设置
     if (id == 1) {
-      // 设置默认倍速
+      // 设置默认倍速（按账号记忆）
       playSpeedDefault = speed;
-      video.put(VideoBoxKey.playSpeedDefault, playSpeedDefault);
+      AccountPrefs.put(VideoBoxKey.playSpeedDefault, playSpeedDefault);
     } else if (id == 2) {
       // 设置默认长按倍速
       longPressSpeedDefault = speed;

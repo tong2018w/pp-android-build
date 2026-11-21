@@ -46,6 +46,7 @@ import 'package:PiliPlus/utils/image_utils.dart';
 import 'package:PiliPlus/utils/ios/pip_helper.dart';
 import 'package:PiliPlus/utils/page_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
+import 'package:PiliPlus/utils/account_pref.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:PiliPlus/utils/storage_pref.dart';
@@ -936,14 +937,19 @@ class HeaderControlState extends State<HeaderControl>
 
                         SmartDialog.showToast("画质已变为：${newQa.desc}");
 
-                        // update
+                        // update：WiFi 画质按账号记忆，蜂窝画质保持全局
                         if (!plPlayerController.tempPlayerConf) {
-                          setting.put(
-                            await ConnectivityUtils.isWiFi
-                                ? SettingBoxKey.defaultVideoQa
-                                : SettingBoxKey.defaultVideoQaCellular,
-                            quality,
-                          );
+                          if (await ConnectivityUtils.isWiFi) {
+                            AccountPrefs.put(
+                              SettingBoxKey.defaultVideoQa,
+                              quality,
+                            );
+                          } else {
+                            setting.put(
+                              SettingBoxKey.defaultVideoQaCellular,
+                              quality,
+                            );
+                          }
                         }
                       },
                       // 可能包含会员解锁画质

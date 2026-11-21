@@ -36,6 +36,7 @@ import 'package:PiliPlus/plugin/pl_player/models/bottom_progress_behavior.dart';
 import 'package:PiliPlus/plugin/pl_player/models/fullscreen_mode.dart';
 import 'package:PiliPlus/plugin/pl_player/models/hwdec_type.dart';
 import 'package:PiliPlus/plugin/pl_player/models/play_repeat.dart';
+import 'package:PiliPlus/utils/account_pref.dart';
 import 'package:PiliPlus/utils/device_utils.dart';
 import 'package:PiliPlus/utils/extension/iterable_ext.dart';
 import 'package:PiliPlus/utils/global_data.dart';
@@ -242,11 +243,17 @@ abstract final class Pref {
         defaultValue: BtmProgressBehavior.alwaysShow.index,
       )];
 
-  static SubtitlePrefType get subtitlePreferenceV2 =>
-      SubtitlePrefType.values[_setting.get(
-        SettingBoxKey.subtitlePreferenceV2,
-        defaultValue: SubtitlePrefType.off.index,
-      )];
+  static SubtitlePrefType get subtitlePreferenceV2 {
+    final accIndex = AccountPrefs.get<int>(SettingBoxKey.subtitlePreferenceV2);
+    final idx = ((accIndex ??
+                _setting.get(
+                  SettingBoxKey.subtitlePreferenceV2,
+                  defaultValue: SubtitlePrefType.off.index,
+                )) as int)
+            .clamp(0, SubtitlePrefType.values.length - 1)
+            .toInt();
+    return SubtitlePrefType.values[idx];
+  }
 
   static bool get useRelativeSlide =>
       _setting.get(SettingBoxKey.useRelativeSlide, defaultValue: false);
@@ -254,10 +261,12 @@ abstract final class Pref {
   static int get sliderDuration =>
       _setting.get(SettingBoxKey.sliderDuration, defaultValue: 90);
 
-  static int get defaultVideoQa => _setting.get(
-    SettingBoxKey.defaultVideoQa,
-    defaultValue: VideoQuality.super8k.code,
-  );
+  static int get defaultVideoQa =>
+      AccountPrefs.get<int>(SettingBoxKey.defaultVideoQa) ??
+      _setting.get(
+        SettingBoxKey.defaultVideoQa,
+        defaultValue: VideoQuality.super8k.code,
+      );
 
   static int get defaultVideoQaCellular => _setting.get(
     SettingBoxKey.defaultVideoQaCellular,
@@ -909,10 +918,15 @@ abstract final class Pref {
     return buffer;
   }
 
-  static String get audioOutput => _setting.get(
-    SettingBoxKey.audioOutput,
-    defaultValue: AudioOutput.defaultValue,
-  );
+  static String get audioOutput {
+    final accValue = AccountPrefs.get<String>(SettingBoxKey.audioOutput);
+    return (accValue != null && accValue.isNotEmpty)
+        ? accValue
+        : _setting.get(
+            SettingBoxKey.audioOutput,
+            defaultValue: AudioOutput.defaultValue,
+          );
+  }
 
   static bool get enableAi =>
       _setting.get(SettingBoxKey.enableAi, defaultValue: false);
@@ -926,8 +940,11 @@ abstract final class Pref {
   static bool get enableAutoLongPressSpeed =>
       _setting.get(SettingBoxKey.enableAutoLongPressSpeed, defaultValue: false);
 
-  static double get playSpeedDefault =>
-      _video.get(VideoBoxKey.playSpeedDefault, defaultValue: 1.0);
+  static double get playSpeedDefault {
+    final accSpeed = AccountPrefs.get<double>(VideoBoxKey.playSpeedDefault);
+    if (accSpeed != null && accSpeed > 0) return accSpeed;
+    return _video.get(VideoBoxKey.playSpeedDefault, defaultValue: 1.0);
+  }
 
   static double get longPressSpeedDefault =>
       _video.get(VideoBoxKey.longPressSpeedDefault, defaultValue: 3.0);

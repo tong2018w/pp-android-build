@@ -8,6 +8,7 @@ import 'package:PiliPlus/pages/setting/widgets/ordered_multi_select_dialog.dart'
 import 'package:PiliPlus/pages/setting/widgets/select_dialog.dart';
 import 'package:PiliPlus/plugin/pl_player/models/audio_output_type.dart';
 import 'package:PiliPlus/plugin/pl_player/models/hwdec_type.dart';
+import 'package:PiliPlus/utils/account_pref.dart';
 import 'package:PiliPlus/utils/filtering_text.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_key.dart';
@@ -260,7 +261,7 @@ Future<void> _showVideoQaDialog(
     ),
   );
   if (res != null) {
-    await GStorage.setting.put(SettingBoxKey.defaultVideoQa, res);
+    await AccountPrefs.put(SettingBoxKey.defaultVideoQa, res);
     setState();
   }
 }
@@ -418,10 +419,7 @@ Future<void> _showAudioOutputDialog(
     ),
   );
   if (res != null && res.isNotEmpty) {
-    await GStorage.setting.put(
-      SettingBoxKey.audioOutput,
-      res.join(','),
-    );
+    await AccountPrefs.put(SettingBoxKey.audioOutput, res.join(','));
     setState();
   }
 }

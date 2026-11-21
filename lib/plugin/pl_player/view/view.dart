@@ -62,6 +62,7 @@ import 'package:PiliPlus/utils/ios/pip_helper.dart';
 import 'package:PiliPlus/utils/mobile_observer.dart';
 import 'package:PiliPlus/utils/path_utils.dart';
 import 'package:PiliPlus/utils/platform_utils.dart';
+import 'package:PiliPlus/utils/account_pref.dart';
 import 'package:PiliPlus/utils/storage.dart';
 import 'package:PiliPlus/utils/storage_key.dart';
 import 'package:PiliPlus/utils/utils.dart';
@@ -745,7 +746,10 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
                     height: 35,
                     padding: const EdgeInsets.only(left: 30),
                     value: speed,
-                    onTap: () => plPlayerController.setPlaybackSpeed(speed),
+                    onTap: () => plPlayerController.setPlaybackSpeed(
+                      speed,
+                      persist: true,
+                    ),
                     child: Text(
                       "${speed}X",
                       style: const TextStyle(color: Colors.white, fontSize: 13),
@@ -808,14 +812,19 @@ class _PLVideoPlayerState extends State<PLVideoPlayer>
 
                       SmartDialog.showToast("画质已变为：${newQa.desc}");
 
-                      // update
+                      // update：WiFi 画质按账号记忆，蜂窝画质保持全局
                       if (!plPlayerController.tempPlayerConf) {
-                        GStorage.setting.put(
-                          await ConnectivityUtils.isWiFi
-                              ? SettingBoxKey.defaultVideoQa
-                              : SettingBoxKey.defaultVideoQaCellular,
-                          quality,
-                        );
+                        if (await ConnectivityUtils.isWiFi) {
+                          AccountPrefs.put(
+                            SettingBoxKey.defaultVideoQa,
+                            quality,
+                          );
+                        } else {
+                          GStorage.setting.put(
+                            SettingBoxKey.defaultVideoQaCellular,
+                            quality,
+                          );
+                        }
                       }
                     },
                     child: Text(

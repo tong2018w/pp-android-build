@@ -30,6 +30,7 @@ import 'package:PiliPlus/plugin/pl_player/models/video_fit_type.dart';
 import 'package:PiliPlus/plugin/pl_player/utils/danmaku_options.dart';
 import 'package:PiliPlus/plugin/pl_player/utils/fullscreen.dart';
 import 'package:PiliPlus/services/service_locator.dart';
+import 'package:PiliPlus/utils/account_pref.dart';
 import 'package:PiliPlus/utils/accounts.dart';
 import 'package:PiliPlus/utils/android/android_helper.dart';
 import 'package:PiliPlus/utils/android/bindings.g.dart';
@@ -111,6 +112,9 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
   late double lastPlaybackSpeed = 1.0;
   final RxDouble _playbackSpeed = Pref.playSpeedDefault.obs;
   late final RxDouble _longPressSpeed = Pref.longPressSpeedDefault.obs;
+
+  /// 上次开播时使用的账号 mid，用于「切换账号后倍速回该账号默认值」
+  int? _lastAccountMid;
 
   final RxDouble volume = RxDouble(
     PlatformUtils.isDesktop ? Pref.desktopVolume : 1.0,
@@ -777,6 +781,19 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
         triggerFullScreen(status: true);
       }
 
+      // 播放体验记忆：切换账号后开新视频，倍速回到当前账号的默认倍速。
+      // 同账号内的临时调速不受影响（由 setPlaybackSpeed(persist) 决定是否记忆）。
+      final accMid = Accounts.main.mid;
+      if (_lastAccountMid == null) {
+        _lastAccountMid = accMid;
+      } else if (!isLive && _lastAccountMid != accMid) {
+        _lastAccountMid = accMid;
+        final accSpeed = Pref.playSpeedDefault;
+        if (_playbackSpeed.value != accSpeed) {
+          _playbackSpeed.value = accSpeed;
+        }
+      }
+
       await _initializePlayer();
       onInit?.call();
     } catch (err, stackTrace) {
@@ -1196,14 +1213,21 @@ class PlPlayerController with BlockConfigMixin, AudioNormalizationMixin {
     }
   }
 
-  /// 设置倍速
-  Future<void> setPlaybackSpeed(double speed) async {
+  /// 设置倍速。
+  /// [persist] 为 true 时同时写入当前账号的默认倍速（播放体验记忆），
+  /// 之后该账号开新视频都会从这个倍速开始。
+  Future<void> setPlaybackSpeed(double speed, {bool persist = false}) async {
     lastPlaybackSpeed = playbackSpeed;
 
     if (speed == _videoPlayerController?.state.rate) return;
 
     await _videoPlayerController?.setRate(speed);
-    if (!isLive) _playbackSpeed.value = speed;
+    if (!isLive) {
+      _playbackSpeed.value = speed;
+      if (persist) {
+        AccountPrefs.put(VideoBoxKey.playSpeedDefault, speed);
+      }
+    }
     _updatePlaybackState();
     if (danmakuController != null) {
       try {
